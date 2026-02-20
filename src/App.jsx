@@ -15,8 +15,6 @@ import {
 } from 'lucide-react';
 import { toCsv } from './lib/csv';
 import { fetchJson } from './lib/fetchJson';
-import { parseNewsItems } from './lib/news';
-import { parseNvdVulnerabilities } from './lib/nvd';
 
 // Augmented Static Data for Tools & Threats with drill-down metadata
 const topTools = [
@@ -224,8 +222,8 @@ const fallbackVulns = [
   },
 ];
 
-const NEWS_URL = 'https://api.rss2json.com/v1/api.json?rss_url=https://thehackernews.com/feeds/posts/default';
-const VULN_URL = 'https://services.nvd.nist.gov/rest/json/cves/2.0?keywordSearch=IAM+Authentication&resultsPerPage=4';
+const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || 'http://localhost:8081/api/v1').replace(/\/$/, '');
+const BRIEFING_URL = `${API_BASE_URL}/intelligence/briefing`;
 
 function formatDate(pubDate) {
   if (!pubDate) return 'Recent';
@@ -273,6 +271,72 @@ function normalizeSeverity(value) {
   return 'medium';
 }
 
+function normalizeRisk(value) {
+  const risk = String(value || 'low').toLowerCase();
+  if (['high', 'medium', 'low'].includes(risk)) {
+    return risk;
+  }
+  return 'low';
+}
+
+function normalizeBriefingNews(items) {
+  if (!Array.isArray(items)) {
+    return [];
+  }
+
+  return items
+    .map((item, index) => {
+      const publishedAtMs = typeof item?.publishedAtMs === 'number' ? item.publishedAtMs : null;
+      return {
+        id: item?.id || `briefing-news-${index}`,
+        title: item?.title || 'Untitled article',
+        link: item?.link || '#',
+        pubDate: item?.publishedAt || null,
+        publishedAtMs,
+        source: item?.source || 'Unknown source',
+        summary: item?.summary || 'No summary available.',
+        tags: Array.isArray(item?.tags) ? item.tags.slice(0, 3) : ['IAM', 'Security'],
+        riskLevel: normalizeRisk(item?.risk),
+      };
+    })
+    .filter((item) => typeof item.link === 'string' && item.link.startsWith('http'));
+}
+
+function normalizeBriefingThreats(items) {
+  if (!Array.isArray(items)) {
+    return [];
+  }
+
+  return items.map((item, index) => ({
+    id: item?.id || `threat-${index}`,
+    title: item?.title || 'Unknown threat',
+    desc: item?.attackPath || item?.title || 'No detail available',
+    type: item?.classification || 'Threat',
+    trend: item?.trend || 'N/A',
+    severity: normalizeSeverity(item?.severity),
+    confidence: item?.confidence || 'medium',
+    responseSla: item?.responseSla || '72 hours',
+    attackPath: item?.attackPath || 'No attack path provided.',
+    indicators: Array.isArray(item?.indicators) ? item.indicators : ['No indicators provided.'],
+    mitigations: Array.isArray(item?.mitigations) ? item.mitigations : ['No mitigations provided.'],
+  }));
+}
+
+function normalizeBriefingVulnerabilities(items) {
+  if (!Array.isArray(items)) {
+    return [];
+  }
+
+  return items.map((item) => ({
+    title: item?.cveId || 'Unknown CVE',
+    desc: item?.summary || 'No English description available.',
+    severity: normalizeSeverity(item?.severity),
+    score: typeof item?.cvssScore === 'number' ? item.cvssScore.toFixed(1) : 'N/A',
+    type: 'CVE Record',
+    referenceUrl: typeof item?.reference === 'string' ? item.reference : null,
+  }));
+}
+
 function downloadCsv(filename, rows) {
   const csvText = toCsv(rows);
   const blob = new Blob([csvText], { type: 'text/csv;charset=utf-8' });
@@ -298,6 +362,7 @@ function Skeleton({ count = 3, type = "row" }) {
 
 function App() {
   const [news, setNews] = useState(fallbackNews);
+  const [threats, setThreats] = useState(largestThreats);
   const [vulns, setVulns] = useState(fallbackVulns);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -310,7 +375,7 @@ function App() {
   const [selectedMatrixId, setSelectedMatrixId] = useState(largestThreats[0].id);
   const activeRequestRef = useRef(null);
 
-  const fetchData = useCallback(async ({ initialLoad = false } = {}) => {
+  const fetchData = useCallback(async ({ initialLoad = false, window = newsWindow } = {}) => {
     const controller = new AbortController();
     if (activeRequestRef.current) {
       activeRequestRef.current.abort();
@@ -324,46 +389,47 @@ function App() {
     }
 
     let nextNews = fallbackNews;
+    let nextThreats = largestThreats;
     let nextVulns = fallbackVulns;
-    let newsFailed = false;
-    let vulnFailed = false;
+    let apiFailed = false;
 
     try {
-      const newsData = await fetchJson(NEWS_URL, {
-        timeoutMs: 5000,
-        retries: 1,
-        signal: controller.signal,
-      });
-      const parsedNews = parseNewsItems(newsData, 16);
-      if (parsedNews.length > 0) {
-        nextNews = parsedNews;
-      }
-    } catch {
-      newsFailed = true;
-    }
-
-    try {
-      const vulnData = await fetchJson(VULN_URL, {
+      const briefingData = await fetchJson(`${BRIEFING_URL}?window=${window}`, {
         timeoutMs: 6500,
         retries: 1,
         signal: controller.signal,
         headers: { Accept: 'application/json' },
       });
-      const parsedVulns = parseNvdVulnerabilities(vulnData, 4);
+
+      const parsedNews = normalizeBriefingNews(briefingData.news);
+      const parsedThreats = normalizeBriefingThreats(briefingData.threats);
+      const parsedVulns = normalizeBriefingVulnerabilities(briefingData.vulnerabilities);
+
+      if (parsedNews.length > 0) {
+        nextNews = parsedNews;
+      }
+      if (parsedThreats.length > 0) {
+        nextThreats = parsedThreats;
+      }
       if (parsedVulns.length > 0) {
         nextVulns = parsedVulns;
       }
+
+      if (briefingData.stale) {
+        setLoadError('Live feeds are degraded. Showing cached intelligence from the backend.');
+      } else {
+        setLoadError(null);
+      }
     } catch {
-      vulnFailed = true;
+      apiFailed = true;
     }
 
     if (!controller.signal.aborted) {
       setNews(nextNews);
+      setThreats(nextThreats);
       setVulns(nextVulns);
-      if (newsFailed && vulnFailed) {
-        setLoadError('Live sources are unavailable. Displaying fallback intelligence.');
-      } else {
-        setLoadError(null);
+      if (apiFailed) {
+        setLoadError('Intelligence API unavailable. Displaying local fallback intelligence.');
       }
       setLoading(false);
       setRefreshing(false);
@@ -372,7 +438,7 @@ function App() {
     if (activeRequestRef.current === controller) {
       activeRequestRef.current = null;
     }
-  }, []);
+  }, [newsWindow]);
 
   useEffect(() => {
     const intervalId = window.setInterval(() => {
@@ -386,7 +452,7 @@ function App() {
 
   useEffect(() => {
     const timerId = window.setTimeout(() => {
-      void fetchData({ initialLoad: true });
+      void fetchData({ initialLoad: true, window: newsWindow });
     }, 0);
     return () => {
       window.clearTimeout(timerId);
@@ -394,7 +460,7 @@ function App() {
         activeRequestRef.current.abort();
       }
     };
-  }, [fetchData]);
+  }, [fetchData, newsWindow]);
 
   const marketSolutions = useMemo(() => [...topTools, ...trendingTools], []);
 
@@ -434,7 +500,7 @@ function App() {
 
   const combinedRows = useMemo(
     () => [
-      ...largestThreats.map((threat) => ({
+      ...threats.map((threat) => ({
         id: threat.id,
         title: threat.title,
         classification: threat.type,
@@ -460,12 +526,14 @@ function App() {
         attackPath: 'Exploitability depends on affected product version and deployment exposure.',
         indicators: ['New exploit PoC publication', 'Unexpected crash/authentication failures tied to vulnerable component'],
         mitigations: ['Patch affected systems based on vendor advisory', 'Add temporary compensating controls at edge/WAF'],
-        referenceUrl: /^CVE-\d{4}-\d+$/i.test(vuln.title)
-          ? `https://nvd.nist.gov/vuln/detail/${vuln.title.toUpperCase()}`
-          : null,
+        referenceUrl: vuln.referenceUrl || (
+          /^CVE-\d{4}-\d+$/i.test(vuln.title)
+            ? `https://nvd.nist.gov/vuln/detail/${vuln.title.toUpperCase()}`
+            : null
+        ),
       })),
     ],
-    [vulns],
+    [threats, vulns],
   );
 
   const filteredRows = useMemo(

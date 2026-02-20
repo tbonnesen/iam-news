@@ -1,50 +1,63 @@
-# IAM News Dashboard
+# IAM News Platform
 
-Production-minded frontend dashboard for IAM market intelligence and vulnerability awareness. The app currently renders a React single-page UI and fetches public intelligence feeds.
+IAM threat and market-intelligence platform with a React frontend and a security-hardened backend-for-frontend (BFF) API.
 
-## Project context (assumed)
-- What we are building: A read-only IAM threat and market intelligence dashboard for security leaders.
-- Users and scale: 100-5,000 users, bursty reads, p95 render under 2.5s, p95 data refresh under 5s.
-- Platform: Web frontend (React + Vite).
-- Deployment target: Containerized static site on NGINX behind a cloud load balancer/CDN.
-- Data sensitivity: Internal-use operational intelligence; no direct PII storage today.
-- Compliance requirements: None mandated yet; SOC2-style controls recommended.
-- Team constraints: JavaScript/React stack, fast iteration, low operational overhead.
-- Non-goals: No user-generated content, no direct write APIs, no in-browser secret handling.
-- External integrations: NVD API and RSS2JSON feed adapter.
+## What this repo contains
+- Frontend: `React + Vite` dashboard (`/src`)
+- Backend: `TypeScript + Fastify` API (`/backend`)
+- CI/CD security controls (`/.github/workflows/ci.yml`)
+- Containerized local runtime (`Dockerfile`, `backend/Dockerfile`, `docker-compose.yml`)
 
 ## Architecture overview
 
 ```text
-[Browser]
+[User Browser]
   | HTTPS
   v
-[React SPA]
-  | fetch (public feeds)
-  +--> [RSS2JSON -> The Hacker News feed]
-  +--> [NVD CVE API]
+[Web SPA (Vite/React)]
+  | /api/v1/intelligence/*
+  v
+[Fastify BFF API]
+  |-- zod validation
+  |-- rate limiting
+  |-- CORS + helmet
+  |-- JWT auth for admin routes
+  |-- structured logging + request IDs
+  |
+  +--> [RSS2JSON / news feed]
+  +--> [NVD API]
 
-Trust boundary #1: Internet client -> app host
-Trust boundary #2: Browser -> third-party APIs
+Trust boundary A: Internet -> Web/API
+Trust boundary B: API -> 3rd-party upstream feeds
 ```
 
-Current state is client-heavy; next production step is a backend-for-frontend (BFF) proxy to centralize validation, caching, rate limiting, and telemetry.
+## Security summary
+- Input validation: Zod request schemas for query/body.
+- Output safety: only `http`/`https` links accepted from upstream content.
+- Abuse controls: global rate limit and bounded query limits.
+- AuthZ: admin refresh endpoint requires JWT with `admin` role.
+- Idempotency: admin refresh requires `Idempotency-Key` and deduplicates repeated requests.
+- Upstream resilience: timeout + retry + stale-cache fallback.
+- URL safety gate: backend only emits links that pass vetted host allowlist + HTTPS + private-network checks.
+- Secrets: environment-driven config (`backend/.env.example`), no secrets in code.
+- Supply chain: lockfiles + CI dependency audit + dependency review + SBOM + CodeQL.
 
-## Security posture in this repo
-- Safe external links: News URLs are protocol-allowlisted (`http`/`https`) before rendering.
-- Resilient network client: timeouts + bounded retry/backoff for external calls.
-- Safer defaults: fallback datasets when external sources fail.
-- Security headers at runtime: `nginx.conf` adds CSP, frame protections, referrer policy, and MIME-sniff prevention.
-- No secrets in code: `.env.example` only; no credentials committed.
+## Threat model (high-level)
+Assets:
+- Intelligence feed integrity
+- API availability
+- Audit logs and admin actions
 
-## Threat model summary
-- Assets: integrity of rendered intelligence, app availability, build pipeline integrity.
-- Entry points: external feed payloads, browser runtime, CI dependency supply chain.
-- Primary attacker goals:
-  - Inject malicious links or payloads through upstream feeds.
-  - Degrade availability via slow or failing dependencies.
-  - Introduce vulnerable dependencies in CI.
-- Relevant OWASP categories: A03 Injection, A05 Security Misconfiguration, A06 Vulnerable Components, A08 Software/Data Integrity Failures.
+Entry points:
+- `/api/v1/intelligence/briefing`
+- `/api/v1/intelligence/admin/refresh`
+- Upstream feed payloads
+- CI dependency graph
+
+Primary attacker goals:
+- Inject malicious feed links/content
+- Trigger API exhaustion
+- Abuse admin refresh operation
 
 ## Local development
 
@@ -52,67 +65,59 @@ Current state is client-heavy; next production step is a backend-for-frontend (B
 - Node.js 22+
 - npm 10+
 
-### Setup
+### Frontend
 ```bash
 npm ci
 npm run dev
 ```
 
-### Quality checks
+### Backend
 ```bash
-npm run lint
-npm run test
-npm run build
+cd backend
+cp .env.example .env
+npm ci
+npm run dev
+```
+
+### Full quality gate
+```bash
 npm run check
+npm --prefix backend run check
 ```
 
-## Test strategy
-- Unit tests: `tests/unit` for deterministic helpers (URL sanitization).
-- Integration tests: `tests/integration` for parser and network utility behavior.
-- Minimal E2E strategy: documented in `tests/e2e/README.md` for future Playwright automation.
-
-## Pre-commit hook
+### Optional unified check
 ```bash
-git config core.hooksPath .githooks
+npm run check:all
 ```
 
-Hook runs:
-- `npm run lint`
-- `npm run test`
-
-## Containerized run
-
-### Build and run with Docker Compose
+## Docker
 ```bash
 docker compose up --build
 ```
+- Web: `http://localhost:8080`
+- API: `http://localhost:8081`
 
-App is served at `http://localhost:8080`.
-
-## CI/CD template
-GitHub Actions workflow in `.github/workflows/ci.yml` includes:
-- Lint, tests, build
-- `npm audit` dependency scan
-- Dependency review action on pull requests
-- CodeQL static analysis
-- CycloneDX SBOM artifact generation
+## API quick reference
+- `GET /health/live`
+- `GET /health/ready`
+- `GET /api/v1/intelligence/briefing?window=24h|7d&limit=1..20`
+- `POST /api/v1/intelligence/admin/refresh`
+  - Requires `Authorization: Bearer <jwt-with-admin-role>`
+  - Requires `Idempotency-Key` header
 
 ## Operational runbook
 
 ### Health checks
-- Build health: `npm run build`
-- Static runtime check: load `/` and verify title + threat matrix render.
+- API liveness/readiness: `/health/live` and `/health/ready`
+- UI check: dashboard loads and Intelligence Briefing shows data for selected window.
 
-### Incident response
-1. If feeds fail, UI falls back to static datasets and shows a warning banner.
-2. Validate upstream APIs from ops environment.
-3. If failure persists, keep fallback mode and open an incident ticket.
-4. If compromised feed content is suspected, block source domain at edge and rotate to trusted mirror.
+### Incident handling
+1. If upstream APIs fail, API serves stale cached data where available.
+2. Check API logs by request ID and upstream error rates.
+3. If cache stale and upstream outage persists, notify stakeholders and keep read-only mode.
+4. Re-run admin refresh after upstream recovery.
 
-### Deployment controls
-- Enforce HTTPS and HSTS at load balancer/CDN layer.
-- Keep immutable build artifacts and deploy by digest/tag.
-- Roll back by reverting to previous known-good image.
-
-## Recommended next hardening step
-Move external feed access from browser to a backend proxy module with request validation, allowlisting, caching, rate limits, and audit telemetry.
+### Security operations
+- Rotate `JWT_HS256_SECRET` periodically (or migrate to asymmetric keys + JWKS).
+- Restrict `CORS_ORIGINS` to production domains.
+- Review admin refresh audit logs for unusual activity.
