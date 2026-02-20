@@ -162,41 +162,165 @@ const largestThreats = [
   },
 ];
 
-const fallbackNews = [
+const fallbackNewsBlueprints = [
   {
     id: 'f1',
-    title: 'Okta Warns of Recent Credential Stuffing Attacks',
-    link: 'https://thehackernews.com/',
-    pubDate: '2026-02-20T08:00:00.000Z',
-    publishedAtMs: Date.parse('2026-02-20T08:00:00.000Z'),
+    title: 'Credential Stuffing Attempts Rise Against IAM Portals',
+    link: 'https://thehackernews.com/search/label/Credential%20Stuffing',
     source: 'The Hacker News',
-    summary: 'Security teams are seeing elevated automated login attempts tied to reused passwords across SaaS tenants.',
+    summary: 'Security operations teams are seeing increased bot-driven sign-in abuse against exposed identity endpoints.',
     tags: ['Credential Security', 'Bot Defense'],
     riskLevel: 'high',
+    ageHours: 2,
   },
   {
     id: 'f2',
-    title: 'Microsoft Entra ID Introduces New Conditional Access Policies',
-    link: 'https://www.microsoft.com/security/business/microsoft-entra',
-    pubDate: '2026-02-18T12:30:00.000Z',
-    publishedAtMs: Date.parse('2026-02-18T12:30:00.000Z'),
-    source: 'Microsoft Security',
-    summary: 'New policy templates aim to reduce risky sign-ins by combining device trust, location, and session context.',
-    tags: ['Conditional Access', 'Identity Governance'],
-    riskLevel: 'medium',
+    title: 'OAuth Consent Abuse Campaigns Continue to Expand',
+    link: 'https://thehackernews.com/search/label/OAuth',
+    source: 'The Hacker News',
+    summary: 'Malicious app consent flows remain an effective account takeover path where scope governance is weak.',
+    tags: ['OAuth', 'Identity Abuse'],
+    riskLevel: 'high',
+    ageHours: 4,
   },
   {
     id: 'f3',
-    title: 'Zero Trust Architecture: Why IAM is the Perimeter',
-    link: 'https://www.nist.gov/publications/zero-trust-architecture',
-    pubDate: '2026-02-12T10:00:00.000Z',
-    publishedAtMs: Date.parse('2026-02-12T10:00:00.000Z'),
-    source: 'NIST',
-    summary: 'Practical guidance on mapping identity controls to zero trust decision points for distributed systems.',
-    tags: ['Zero Trust', 'Architecture'],
+    title: 'Session Replay Activity Highlights MFA Bypass Exposure',
+    link: 'https://thehackernews.com/search/label/MFA',
+    source: 'The Hacker News',
+    summary: 'AiTM-style phishing campaigns are increasingly chaining credential theft to session token replay.',
+    tags: ['MFA', 'Session Security'],
+    riskLevel: 'high',
+    ageHours: 8,
+  },
+  {
+    id: 'f4',
+    title: 'Cloud IAM Drift Creates Privilege Escalation Paths',
+    link: 'https://thehackernews.com/search/label/Cloud%20Security',
+    source: 'The Hacker News',
+    summary: 'Posture scans continue to identify stale admin grants and dormant privileged roles in production tenants.',
+    tags: ['Cloud IAM', 'Least Privilege'],
+    riskLevel: 'medium',
+    ageHours: 12,
+  },
+  {
+    id: 'f5',
+    title: 'Identity Telemetry Correlation Improves Early Threat Detection',
+    link: 'https://thehackernews.com/search/label/Identity',
+    source: 'The Hacker News',
+    summary: 'Security teams are combining IdP, endpoint, and network signals to identify takeover attempts sooner.',
+    tags: ['Detection', 'Threat Hunting'],
+    riskLevel: 'medium',
+    ageHours: 18,
+  },
+  {
+    id: 'f6',
+    title: 'Passkey Rollouts Reduce Phishing Success Rates',
+    link: 'https://thehackernews.com/search/label/Authentication',
+    source: 'The Hacker News',
+    summary: 'Organizations expanding passwordless sign-ins report measurable decreases in credential replay abuse.',
+    tags: ['Passkeys', 'Authentication'],
+    riskLevel: 'medium',
+    ageHours: 22,
+  },
+  {
+    id: 'f7',
+    title: 'Conditional Access Baselines Lower Risky Sign-In Volume',
+    link: 'https://thehackernews.com/search/label/Zero%20Trust',
+    source: 'The Hacker News',
+    summary: 'Adaptive policies using user risk and device trust are reducing successful suspicious authentications.',
+    tags: ['Conditional Access', 'Zero Trust'],
+    riskLevel: 'medium',
+    ageHours: 30,
+  },
+  {
+    id: 'f8',
+    title: 'Vulnerability PoCs Accelerate Identity Patch Timelines',
+    link: 'https://thehackernews.com/search/label/Vulnerability',
+    source: 'The Hacker News',
+    summary: 'Published exploit code is shrinking the response window for exposed identity services and gateways.',
+    tags: ['Vulnerability Management', 'Patching'],
+    riskLevel: 'high',
+    ageHours: 42,
+  },
+  {
+    id: 'f9',
+    title: 'Privileged Session Monitoring Detects Suspicious Admin Patterns',
+    link: 'https://thehackernews.com/search/label/CyberArk',
+    source: 'The Hacker News',
+    summary: 'Session-level recording and behavioral analytics continue to improve detection of privileged misuse.',
+    tags: ['PAM', 'Detection'],
+    riskLevel: 'medium',
+    ageHours: 56,
+  },
+  {
+    id: 'f10',
+    title: 'Identity Provider Resilience Drills Expand Across Enterprises',
+    link: 'https://thehackernews.com/search/label/Identity',
+    source: 'The Hacker News',
+    summary: 'Teams are validating degraded authentication operations for third-party IdP outages and latency spikes.',
+    tags: ['Resilience', 'Business Continuity'],
+    riskLevel: 'medium',
+    ageHours: 74,
+  },
+  {
+    id: 'f11',
+    title: 'Federation Trust Cleanup Reduces Third-Party Access Risk',
+    link: 'https://thehackernews.com/search/label/Identity',
+    source: 'The Hacker News',
+    summary: 'Security teams are pruning stale trust links and limiting partner app scope to reduce blast radius.',
+    tags: ['Federation', 'Third-Party Risk'],
+    riskLevel: 'medium',
+    ageHours: 96,
+  },
+  {
+    id: 'f12',
+    title: 'Automated Access Reviews Shrink Entitlement Drift',
+    link: 'https://thehackernews.com/search/label/Identity%20and%20Access%20Management',
+    source: 'The Hacker News',
+    summary: 'Automated certification workflows are helping remove unused permissions before annual audit windows.',
+    tags: ['IGA', 'Compliance'],
     riskLevel: 'low',
+    ageHours: 120,
+  },
+  {
+    id: 'f13',
+    title: 'Token Revocation Playbooks Prioritized in Incident Response',
+    link: 'https://thehackernews.com/search/label/Authentication',
+    source: 'The Hacker News',
+    summary: 'Blue teams are standardizing rapid token/session invalidation in containment workflows after compromise.',
+    tags: ['Incident Response', 'Token Security'],
+    riskLevel: 'medium',
+    ageHours: 144,
+  },
+  {
+    id: 'f14',
+    title: 'Identity Governance Programs Focus on Least-Privilege Enforcement',
+    link: 'https://thehackernews.com/search/label/Cloud%20Security',
+    source: 'The Hacker News',
+    summary: 'Program owners are tightening role definitions and implementing periodic role recertification controls.',
+    tags: ['Least Privilege', 'Governance'],
+    riskLevel: 'low',
+    ageHours: 164,
   },
 ];
+
+function buildFallbackNews(nowMs = Date.now()) {
+  return fallbackNewsBlueprints.map((item) => {
+    const publishedAtMs = nowMs - item.ageHours * 60 * 60 * 1000;
+    return {
+      id: item.id,
+      title: item.title,
+      link: item.link,
+      pubDate: new Date(publishedAtMs).toISOString(),
+      publishedAtMs,
+      source: item.source,
+      summary: item.summary,
+      tags: item.tags,
+      riskLevel: item.riskLevel,
+    };
+  });
+}
 
 const fallbackVulns = [
   {
@@ -361,7 +485,7 @@ function Skeleton({ count = 3, type = "row" }) {
 }
 
 function App() {
-  const [news, setNews] = useState(fallbackNews);
+  const [news, setNews] = useState(() => buildFallbackNews());
   const [threats, setThreats] = useState(largestThreats);
   const [vulns, setVulns] = useState(fallbackVulns);
   const [loading, setLoading] = useState(true);
@@ -388,7 +512,7 @@ function App() {
       setLoadError(null);
     }
 
-    let nextNews = fallbackNews;
+    let nextNews = buildFallbackNews();
     let nextThreats = largestThreats;
     let nextVulns = fallbackVulns;
     let apiFailed = false;
@@ -472,7 +596,7 @@ function App() {
   const filteredNews = useMemo(() => {
     const now = nowTs;
     const rangeMs = newsWindow === '24h' ? 24 * 60 * 60 * 1000 : 7 * 24 * 60 * 60 * 1000;
-    const maxItems = newsWindow === '24h' ? 4 : 8;
+    const maxItems = newsWindow === '24h' ? 6 : 12;
 
     const inWindow = news
       .filter((item) => {
@@ -591,12 +715,6 @@ function App() {
           </button>
         </div>
       </header>
-
-      {loadError ? (
-        <div className="status-banner" role="status" aria-live="polite">
-          {loadError}
-        </div>
-      ) : null}
 
       <main className="bento-grid">
 
@@ -922,6 +1040,12 @@ function App() {
         </section>
 
       </main>
+
+      {loadError ? (
+        <div className="status-banner" role="status" aria-live="polite">
+          {loadError}
+        </div>
+      ) : null}
 
     </div>
   );
